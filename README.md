@@ -188,6 +188,25 @@ JWT_SECRET=your-secret-key
 SCHOOL_EMAIL_DOMAINS=kiit.ac.in
 ```
 
+## 📦 Git Setup
+
+### Initial Setup
+```bash
+git init
+git add .
+git commit -m "Initial commit: Events Navigator Platform"
+git remote add origin YOUR_GITHUB_REPO_URL
+git branch -M main
+git push -u origin main
+```
+
+### Daily Workflow
+```bash
+git add .
+git commit -m "Your commit message"
+git push
+```
+
 ## 📄 License
 
 This project is created for HACK-A-BOT 2.0 hackathon.
