@@ -140,6 +140,36 @@
 - Run migration script on first deploy
 - Check database file permissions
 
+**Vercel Errors:**
+
+**Error: "The provided path 'frontend/frontend' does not exist"**
+- **Fix**: Go to Vercel Dashboard → Project Settings → Root Directory
+- Set Root Directory to: `frontend` (if deploying from root) or `.` (if deploying from frontend)
+- Make sure `frontend/vercel.json` exists
+
+**Error: "Environment Variable references Secret which does not exist"**
+- **Fix**: Go to Vercel Dashboard → Settings → Environment Variables
+- Add `VITE_API_URL` with value: `https://event-navigator-backend.onrender.com/api`
+- Make sure it's enabled for Production, Preview, and Development
+- **DO NOT** use `@secret_name` syntax in vercel.json - set it directly in dashboard
+
+**Error: "vercel.json should be inside provided root directory"**
+- **Fix**: 
+  - If deploying from `frontend/`, make sure `frontend/vercel.json` exists
+  - If deploying from root, make sure root `vercel.json` exists and Root Directory is set to `.`
+
+**Quick Vercel CLI Fix:**
+```powershell
+# 1. Navigate to frontend directory
+cd frontend
+
+# 2. Make sure environment variable is set in Vercel dashboard first!
+# Go to: https://vercel.com/your-project/settings/environment-variables
+
+# 3. Deploy
+vercel --prod
+```
+
 ---
 
 ## 🎯 Quick Deploy Commands

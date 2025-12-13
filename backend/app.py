@@ -1419,6 +1419,42 @@ def remove_banned_word(word_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Root route for health check
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        'message': 'Events Navigator Backend API',
+        'status': 'running',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/health',
+            'api': '/api',
+            'events': '/api/events',
+            'auth': '/api/auth',
+            'stats': '/api/stats'
+        }
+    }), 200
+
+# Health check endpoint for Render
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Test database connection
+        conn = get_db()
+        conn.close()
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 503
+
 # Initialize database on startup
 init_db()
 
