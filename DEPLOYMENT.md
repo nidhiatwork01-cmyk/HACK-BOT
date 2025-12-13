@@ -37,7 +37,8 @@
      ADMIN_SECRET_KEY=admin-secret-2024
      ```
 6. Click "Create Web Service"
-7. Copy the URL (e.g., `https://your-app.onrender.com`)
+7. Copy the URL: `https://event-navigator-backend.onrender.com`
+   - **IMPORTANT:** Use this URL for frontend configuration!
 
 ---
 
@@ -47,7 +48,7 @@
 
 1. Create `.env.production` in `frontend/` folder:
    ```
-   VITE_API_URL=https://your-backend-url.onrender.com/api
+   VITE_API_URL=https://event-navigator-backend.onrender.com/api
    ```
 
 2. Update `vite.config.js` if needed
@@ -58,17 +59,25 @@
 2. Sign up/Login with GitHub
 3. Click "New Project"
 4. Import your GitHub repository
-5. Configure:
+5. **IMPORTANT - Project Name:**
+   - Use only: letters, numbers, underscores
+   - **NO hyphens (-), spaces, or special characters**
+   - **Cannot start with a number**
+   - **Must be unique** - if you see "Project already exists" error, use a different name
+   - Good: `events_navigator_kiit`, `eventsnavigator`, `kiit_events_portal`
+   - Bad: `events-navigator` ❌, `123events` ❌, `events_navigator` (if already exists) ❌
+6. Configure:
    - **Framework Preset**: Vite
    - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
+   - **Build Command**: `npm run build` (or leave empty)
    - **Output Directory**: `dist`
    - **Environment Variables**:
-     ```
-     VITE_API_URL=https://your-backend-url.onrender.com/api
-     ```
-6. Click "Deploy"
-7. Your app will be live at `https://your-app.vercel.app`
+     - **Key**: `VITE_API_URL`
+     - **Value**: `https://event-navigator-backend.onrender.com/api`
+     - **Environment**: Select all (Production, Preview, Development)
+7. **Remove any example environment variables** (like `EXAMPLE_NAME`)
+8. Click "Deploy"
+9. Your app will be live at `https://your-project-name.vercel.app`
 
 ---
 
