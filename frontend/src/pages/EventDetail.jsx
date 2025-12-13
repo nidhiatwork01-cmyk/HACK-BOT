@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { Calendar, MapPin, Users, ArrowLeft, CheckCircle2, Mail, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Users, ArrowLeft, CheckCircle2, Mail, Trash2, Navigation } from 'lucide-react'
 import { format } from 'date-fns'
 import { getEvent, registerEvent, getRegistrations, markAsRegistered, deleteEvent } from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import { motion } from 'framer-motion'
+import { openDirections, openMapSearch } from '../utils/maps'
 
 const EventDetail = () => {
   const { id } = useParams()
@@ -231,9 +232,54 @@ const EventDetail = () => {
                   <span className="font-medium">{format(eventDate, 'EEEE, MMMM dd, yyyy')} at {format(eventDate, 'h:mm a')}</span>
                 </div>
 
-                <div className="flex items-center gap-3 text-gray-700">
-                  <MapPin className="w-5 h-5 text-red-500" />
-                  <span className="font-medium">{event.venue}</span>
+                <div className="flex items-center justify-between gap-3 text-gray-700">
+                  <div className="flex items-center gap-3 flex-1">
+                    <MapPin className="w-5 h-5 text-red-500 flex-shrink-0" />
+                    <div className="flex-1">
+                      <span className="font-medium">{event.venue}</span>
+                      {event.location_address && event.location_address !== event.venue && (
+                        <p className="text-sm text-gray-500 mt-0.5">{event.location_address}</p>
+                      )}
+                      {event.location_lat && event.location_lng && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          📍 Precise location available - Click Directions for exact navigation
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Use precise location if available
+                        const location = event.location_lat && event.location_lng
+                          ? { coordinates: { lat: event.location_lat, lng: event.location_lng }, address: event.location_address || event.venue }
+                          : event.location_address || event.venue
+                        openMapSearch(location)
+                      }}
+                      title="View on Google Maps"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      View Map
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Use precise coordinates if available for accurate navigation
+                        const destination = event.location_lat && event.location_lng
+                          ? { location_lat: event.location_lat, location_lng: event.location_lng, venue: event.venue, location_address: event.location_address }
+                          : event.location_address || event.venue
+                        openDirections(destination)
+                      }}
+                      className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                      title={event.location_lat ? "Get precise directions using coordinates" : "Get directions to this venue"}
+                    >
+                      <Navigation className="w-3 h-3" />
+                      {event.location_lat ? "Precise Directions" : "Directions"}
+                    </Button>
+                  </div>
                 </div>
 
                 {event.society && (
@@ -243,6 +289,94 @@ const EventDetail = () => {
                   </div>
                 )}
               </div>
+
+              {/* Map Preview Section */}
+              {event.venue && (
+                <div className="pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-red-500" />
+                      Location
+                      {event.location_lat && event.location_lng && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
+                          Precise Location
+                        </span>
+                      )}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const location = event.location_lat && event.location_lng
+                            ? { coordinates: { lat: event.location_lat, lng: event.location_lng }, address: event.location_address || event.venue }
+                            : event.location_address || event.venue
+                          openMapSearch(location)
+                        }}
+                        title="View on Google Maps"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        View Map
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const destination = event.location_lat && event.location_lng
+                            ? { location_lat: event.location_lat, location_lng: event.location_lng, venue: event.venue, location_address: event.location_address }
+                            : event.location_address || event.venue
+                          openDirections(destination)
+                        }}
+                        className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                        title={event.location_lat ? "Get precise directions using coordinates" : "Get directions to this venue"}
+                      >
+                        <Navigation className="w-4 h-4" />
+                        {event.location_lat ? "Precise Directions" : "Get Directions"}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-gray-50">
+                    <a
+                      href={event.location_lat && event.location_lng
+                        ? `https://www.google.com/maps?q=${event.location_lat},${event.location_lng}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_address || event.venue)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block relative w-full h-64 bg-gradient-to-br from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 transition-all group cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        const location = event.location_lat && event.location_lng
+                          ? { coordinates: { lat: event.location_lat, lng: event.location_lng }, address: event.location_address || event.venue }
+                          : event.location_address || event.venue
+                        openMapSearch(location)
+                      }}
+                    >
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                          <MapPin className="w-8 h-8 text-white" />
+                        </div>
+                        <p className="text-lg font-semibold text-gray-800 text-center mb-2">{event.venue}</p>
+                        {event.location_address && event.location_address !== event.venue && (
+                          <p className="text-sm text-gray-600 text-center mb-1">{event.location_address}</p>
+                        )}
+                        {event.location_lat && event.location_lng && (
+                          <p className="text-xs text-green-600 font-semibold mb-2">📍 Precise coordinates available</p>
+                        )}
+                        <p className="text-sm text-gray-600 text-center">Click to view on Google Maps</p>
+                        <div className="mt-4 flex items-center gap-2 text-blue-600 group-hover:text-blue-700">
+                          <Navigation className="w-4 h-4" />
+                          <span className="text-sm font-medium">Get Directions</span>
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    {event.location_lat 
+                      ? "Precise location coordinates available - Click for exact navigation to KIIT University"
+                      : "Click the map or use the buttons above to get directions to this venue"}
+                  </p>
+                </div>
+              )}
 
               <div className="pt-6 border-t border-gray-200">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">About</h2>

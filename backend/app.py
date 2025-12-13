@@ -89,6 +89,24 @@ def init_db():
         except Exception as e:
             print(f"Note: is_expired column may already exist: {e}")
     
+    # Migrate: Add location columns for precise navigation
+    location_columns = ['location_id', 'location_lat', 'location_lng', 'location_address']
+    for col in location_columns:
+        if col not in columns:
+            try:
+                if col == 'location_id':
+                    c.execute('ALTER TABLE events ADD COLUMN location_id TEXT')
+                elif col == 'location_lat':
+                    c.execute('ALTER TABLE events ADD COLUMN location_lat REAL')
+                elif col == 'location_lng':
+                    c.execute('ALTER TABLE events ADD COLUMN location_lng REAL')
+                elif col == 'location_address':
+                    c.execute('ALTER TABLE events ADD COLUMN location_address TEXT')
+                conn.commit()
+                print(f"✅ Added {col} column to events table")
+            except Exception as e:
+                print(f"Note: {col} column may already exist: {e}")
+    
     # Registrations table
     c.execute('''CREATE TABLE IF NOT EXISTS registrations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -265,40 +283,33 @@ def get_events():
     category = request.args.get('category')
     search = request.args.get('search')
     
-    # Check if registration_url column exists
+    # Check which columns exist
     c.execute("PRAGMA table_info(events)")
     columns = [row[1] for row in c.fetchall()]
     has_registration_url = 'registration_url' in columns
-    
-    # Check if is_expired column exists
     has_is_expired = 'is_expired' in columns
+    has_location = 'location_id' in columns
+    
+    # Build SELECT query with available columns
+    base_fields = ['e.id', 'e.title', 'e.description', 'e.category', 'e.date', 'e.time', 'e.venue', 
+                   'e.poster_url', 'e.society', 'e.created_by', 'e.is_locked', 'e.created_at']
     
     if has_registration_url:
-        if has_is_expired:
-            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                       e.poster_url, e.registration_url, e.society, e.created_by, e.is_locked, 
-                       e.is_expired, e.created_at,
-                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                       FROM events e WHERE 1=1"""
-        else:
-            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                       e.poster_url, e.registration_url, e.society, e.created_by, e.is_locked, 
-                       0 as is_expired, e.created_at,
-                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                       FROM events e WHERE 1=1"""
+        base_fields.insert(8, 'e.registration_url')
     else:
-        if has_is_expired:
-            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                       e.poster_url, NULL as registration_url, e.society, e.created_by, e.is_locked, 
-                       e.is_expired, e.created_at,
-                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                       FROM events e WHERE 1=1"""
-        else:
-            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                       e.poster_url, NULL as registration_url, e.society, e.created_by, e.is_locked, 
-                       0 as is_expired, e.created_at,
-                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                       FROM events e WHERE 1=1"""
+        base_fields.insert(8, 'NULL as registration_url')
+    
+    if has_is_expired:
+        base_fields.append('e.is_expired')
+    else:
+        base_fields.append('0 as is_expired')
+    
+    if has_location:
+        base_fields.extend(['e.location_id', 'e.location_lat', 'e.location_lng', 'e.location_address'])
+    
+    base_fields.append('(SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count')
+    
+    query = f"""SELECT {', '.join(base_fields)} FROM events e WHERE 1=1"""
     
     params = []
     
@@ -395,13 +406,34 @@ def create_event():
             event_password_hash = hash_password(data['event_password'])
             is_locked = 1
         
-        c.execute('''INSERT INTO events (title, description, category, date, time, venue, poster_url, registration_url, society, created_by, event_password_hash, is_locked)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (data['title'], data['description'], data['category'], 
-                   data['date'], data['time'], data['venue'], 
-                   data.get('poster_url', ''), data.get('registration_url', ''),
-                   data.get('society', ''),
-                   request.user_id, event_password_hash, is_locked))
+        # Check if location data is provided (for privileged users)
+        location_id = data.get('location_id')
+        location_lat = data.get('location_lat')
+        location_lng = data.get('location_lng')
+        location_address = data.get('location_address')
+        
+        # Check if location columns exist
+        c.execute("PRAGMA table_info(events)")
+        columns = [row[1] for row in c.fetchall()]
+        has_location_columns = 'location_id' in columns
+        
+        if has_location_columns:
+            c.execute('''INSERT INTO events (title, description, category, date, time, venue, poster_url, registration_url, society, created_by, event_password_hash, is_locked, location_id, location_lat, location_lng, location_address)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                      (data['title'], data['description'], data['category'], 
+                       data['date'], data['time'], data['venue'], 
+                       data.get('poster_url', ''), data.get('registration_url', ''),
+                       data.get('society', ''),
+                       request.user_id, event_password_hash, is_locked,
+                       location_id, location_lat, location_lng, location_address))
+        else:
+            c.execute('''INSERT INTO events (title, description, category, date, time, venue, poster_url, registration_url, society, created_by, event_password_hash, is_locked)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                      (data['title'], data['description'], data['category'], 
+                       data['date'], data['time'], data['venue'], 
+                       data.get('poster_url', ''), data.get('registration_url', ''),
+                       data.get('society', ''),
+                       request.user_id, event_password_hash, is_locked))
         
         conn.commit()
         event_id = c.lastrowid
@@ -418,19 +450,22 @@ def get_event(event_id):
         conn = get_db()
         c = conn.cursor()
         
-        # Check if is_expired column exists
+        # Check if is_expired and location columns exist
         c.execute("PRAGMA table_info(events)")
         columns = [row[1] for row in c.fetchall()]
         has_is_expired = 'is_expired' in columns
+        has_location = 'location_id' in columns
         
+        # Build SELECT query based on available columns
+        select_fields = ['id', 'title', 'description', 'category', 'date', 'time', 'venue', 'poster_url', 
+                        'registration_url', 'society', 'created_by', 'is_locked', 'created_at']
         if has_is_expired:
-            event = c.execute('''SELECT id, title, description, category, date, time, venue, poster_url, 
-                                 registration_url, society, created_by, is_locked, is_expired, created_at 
-                                 FROM events WHERE id = ?''', (event_id,)).fetchone()
-        else:
-            event = c.execute('''SELECT id, title, description, category, date, time, venue, poster_url, 
-                                 registration_url, society, created_by, is_locked, created_at 
-                                 FROM events WHERE id = ?''', (event_id,)).fetchone()
+            select_fields.insert(-1, 'is_expired')
+        if has_location:
+            select_fields.extend(['location_id', 'location_lat', 'location_lng', 'location_address'])
+        
+        query = f'SELECT {", ".join(select_fields)} FROM events WHERE id = ?'
+        event = c.execute(query, (event_id,)).fetchone()
         
         conn.close()
         
