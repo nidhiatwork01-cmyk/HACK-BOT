@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { Calendar, MapPin, Users, ArrowLeft, CheckCircle2, Lock, AlertCircle, Mail } from 'lucide-react'
+import { Calendar, MapPin, Users, ArrowLeft, CheckCircle2, Mail, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
-import { getEvent, registerEvent, getRegistrations, markAsRegistered } from '../services/api'
+import { getEvent, registerEvent, getRegistrations, markAsRegistered, deleteEvent } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -12,15 +12,12 @@ import { motion } from 'framer-motion'
 const EventDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [event, setEvent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [registrations, setRegistrations] = useState(0)
-  const [eventPassword, setEventPassword] = useState('')
   const [registered, setRegistered] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [passwordError, setPasswordError] = useState('')
-  const [showPasswordInput, setShowPasswordInput] = useState(false)
   const [email, setEmail] = useState('')
   const [showEmailInput, setShowEmailInput] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -57,30 +54,17 @@ const EventDetail = () => {
       return
     }
 
-    // If event is locked, show password input first
-    if (event?.is_locked === 1 && !showPasswordInput) {
-      setShowPasswordInput(true)
-      return
-    }
-
     setSubmitting(true)
-    setPasswordError('')
 
     try {
-      await registerEvent(id, event?.is_locked === 1 ? eventPassword : null, email)
+      await registerEvent(id, null, email)
       setRegistered(true)
       setRegistrations(prev => prev + 1)
-      setEventPassword('')
-      setShowPasswordInput(false)
       setShowEmailInput(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 5000)
     } catch (error) {
-      if (error.requiresPassword) {
-        setPasswordError(error.message || 'Incorrect password')
-      } else {
-        alert(error.message || 'Registration failed. You may already be registered.')
-      }
+      alert(error.message || 'Registration failed. You may already be registered.')
     } finally {
       setSubmitting(false)
     }
@@ -99,6 +83,62 @@ const EventDetail = () => {
       setSubmitting(false)
     }
   }
+
+  const handleDeleteEvent = async () => {
+    if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      console.log('Attempting to delete event:', id)
+      console.log('User:', user)
+      console.log('Event:', event)
+      console.log('Token exists:', !!localStorage.getItem('token'))
+      
+      await deleteEvent(id)
+      alert('Event deleted successfully!')
+      navigate('/events')
+    } catch (error) {
+      console.error('Delete error details:', error)
+      console.error('Error response:', error.response)
+      console.error('Error message:', error.message)
+      
+      let errorMessage = 'Failed to delete event'
+      
+      if (error.response) {
+        const errorData = error.response.data
+        errorMessage = errorData.error || errorMessage
+        if (errorData.details) {
+          errorMessage += `\n\nDetails: ${errorData.details}`
+        }
+        if (error.response.status === 401) {
+          errorMessage = 'You are not logged in. Please log in and try again.'
+        } else if (error.response.status === 403) {
+          errorMessage = errorData.error || 'You do not have permission to delete this event.'
+        } else if (error.response.status === 404) {
+          errorMessage = 'Event not found. It may have already been deleted.'
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      alert(`Error: ${errorMessage}\n\nPlease check:\n- You are logged in\n- You are the event creator or an admin\n- Backend server is running on port 5000`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Check if current user is the event creator
+  // Also allow deletion if event is orphaned (created_by is null/undefined) - any logged-in user can delete orphaned events
+  const isEventCreator = user && event && (
+    user.id === event.created_by || 
+    event.created_by === null || 
+    event.created_by === undefined
+  )
+  
+  // Show delete button if user is creator, admin, or event is orphaned
+  const canDelete = isEventCreator || (user && ['admin', 'faculty', 'ksac_member'].includes(user.role))
 
 
   if (loading) {
@@ -167,9 +207,22 @@ const EventDetail = () => {
             <Card>
               <div className="flex items-start justify-between mb-4">
                 <h1 className="text-4xl font-bold text-gray-900">{event.title}</h1>
-                <span className={`px-4 py-2 rounded-full text-sm font-semibold ${categoryColors[event.category] || 'bg-gray-100 text-gray-700'}`}>
-                  {event.category}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className={`px-4 py-2 rounded-full text-sm font-semibold ${categoryColors[event.category] || 'bg-gray-100 text-gray-700'}`}>
+                    {event.category}
+                  </span>
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      onClick={handleDeleteEvent}
+                      disabled={submitting}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      title="Delete this event"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-4 mb-6">
@@ -239,46 +292,13 @@ const EventDetail = () => {
                       </div>
                     )}
 
-                    {event.is_locked === 1 && showPasswordInput && (
-                      <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                          <Lock className="w-4 h-4" />
-                          Event Password
-                        </label>
-                        <Input
-                          type="password"
-                          placeholder="Enter event password"
-                          value={eventPassword}
-                          onChange={(e) => {
-                            setEventPassword(e.target.value)
-                            setPasswordError('')
-                          }}
-                          required={event.is_locked === 1}
-                        />
-                        {passwordError && (
-                          <p className="mt-1 text-sm text-red-600">{passwordError}</p>
-                        )}
-                      </div>
-                    )}
-                    
-                    {event.is_locked === 1 && !showPasswordInput && showEmailInput ? (
-                      <Button
-                        type="button"
-                        onClick={() => setShowPasswordInput(true)}
-                        className="w-full"
-                      >
-                        <Lock className="w-4 h-4 mr-2" />
-                        Enter Password to Register
-                      </Button>
-                    ) : (
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={submitting || (showEmailInput && !email) || (event.is_locked === 1 && showPasswordInput && !eventPassword)}
-                      >
-                        {submitting ? 'Registering...' : showEmailInput ? 'Submit Registration' : 'REGISTER'}
-                      </Button>
-                    )}
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={submitting || (showEmailInput && !email)}
+                    >
+                      {submitting ? 'Registering...' : showEmailInput ? 'Done' : 'REGISTER'}
+                    </Button>
 
                     {showEmailInput && (
                       <Button
@@ -288,9 +308,6 @@ const EventDetail = () => {
                         onClick={() => {
                           setShowEmailInput(false)
                           setEmail('')
-                          setShowPasswordInput(false)
-                          setEventPassword('')
-                          setPasswordError('')
                         }}
                       >
                         Cancel
@@ -337,12 +354,29 @@ const EventDetail = () => {
 
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <p className="text-sm text-gray-500 text-center">
-                  {event.is_locked === 1
-                    ? 'This event requires a password to register'
-                    : 'By registering, you\'ll receive updates about this event'
-                  }
+                  By registering, you'll receive updates about this event
                 </p>
               </div>
+
+              {canDelete && (
+                <div className="mt-6 pt-6 border-t border-red-200">
+                  <p className="text-sm font-medium text-gray-700 mb-3 text-center">
+                    Event Management
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleDeleteEvent}
+                    disabled={submitting}
+                    className="w-full text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {submitting ? 'Deleting...' : 'Delete Event'}
+                  </Button>
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    {isEventCreator ? 'Only you can see this option' : 'Admin/Event Management'}
+                  </p>
+                </div>
+              )}
             </Card>
           </div>
         </div>

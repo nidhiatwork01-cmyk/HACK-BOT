@@ -106,7 +106,12 @@ const CreateEvent = () => {
       navigate('/events')
     } catch (error) {
       console.error('Error:', error)
-      alert(error.message || 'Failed to create event. Please check if the backend is running on port 5000.')
+      // Show special message for banned words
+      if (error.violates_rules) {
+        alert(`❌ ${error.message}\n\n${error.details || 'Please review your event content and remove any inappropriate language.'}`)
+      } else {
+        alert(error.message || 'Failed to create event. Please check if the backend is running on port 5000.')
+      }
     } finally {
       setLoading(false)
     }

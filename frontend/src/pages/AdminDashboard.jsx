@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, CheckCircle, Clock, TrendingUp, Filter, Send, Loader2, Shield, AlertCircle } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, TrendingUp, Filter, Send, Loader2, Shield, AlertCircle, X, Plus, Ban } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getEventRequests, respondToRequest, getAssistantStats } from '../services/assistant'
+import { getBannedWords, addBannedWord, removeBannedWord } from '../services/api'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Textarea from '../components/ui/Textarea'
+import Input from '../components/ui/Input'
 import { motion } from 'framer-motion'
 import { format } from 'date-fns'
 
@@ -20,6 +22,11 @@ const AdminDashboard = () => {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [responseText, setResponseText] = useState('')
   const [responding, setResponding] = useState(false)
+  const [activeTab, setActiveTab] = useState('requests') // 'requests' or 'banned-words'
+  const [bannedWords, setBannedWords] = useState([])
+  const [newWord, setNewWord] = useState('')
+  const [newWordReason, setNewWordReason] = useState('')
+  const [addingWord, setAddingWord] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -37,16 +44,52 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [requestsData, statsData] = await Promise.all([
+      const [requestsData, statsData, bannedWordsData] = await Promise.all([
         getEventRequests(filter),
-        getAssistantStats()
+        getAssistantStats(),
+        getBannedWords().catch(() => []) // Don't fail if not admin
       ])
       setRequests(requestsData)
       setStats(statsData)
+      setBannedWords(bannedWordsData)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAddBannedWord = async () => {
+    if (!newWord.trim()) {
+      alert('Please enter a word to ban')
+      return
+    }
+
+    setAddingWord(true)
+    try {
+      await addBannedWord(newWord.trim(), newWordReason.trim())
+      setNewWord('')
+      setNewWordReason('')
+      await fetchData()
+      alert('Banned word added successfully!')
+    } catch (error) {
+      alert('Failed to add banned word: ' + error.message)
+    } finally {
+      setAddingWord(false)
+    }
+  }
+
+  const handleRemoveBannedWord = async (wordId) => {
+    if (!window.confirm('Are you sure you want to remove this banned word?')) {
+      return
+    }
+
+    try {
+      await removeBannedWord(wordId)
+      await fetchData()
+      alert('Banned word removed successfully!')
+    } catch (error) {
+      alert('Failed to remove banned word: ' + error.message)
     }
   }
 
@@ -191,22 +234,150 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="mb-6 flex items-center gap-4">
-        <Filter className="text-gray-400 w-5 h-5" />
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
+      {/* Tabs */}
+      <div className="mb-6 flex items-center gap-4 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
+            activeTab === 'requests'
+              ? 'border-purple-500 text-purple-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
         >
-          <option value="all">All Requests</option>
-          <option value="pending">Pending</option>
-          <option value="responded">Responded</option>
-          <option value="approved">Approved</option>
-        </select>
+          <MessageSquare className="w-4 h-4 inline mr-2" />
+          Event Requests
+        </button>
+        <button
+          onClick={() => setActiveTab('banned-words')}
+          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
+            activeTab === 'banned-words'
+              ? 'border-red-500 text-red-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Ban className="w-4 h-4 inline mr-2" />
+          Banned Words
+        </button>
       </div>
 
-      {/* Requests List */}
+      {/* Filter (only show for requests tab) */}
+      {activeTab === 'requests' && (
+        <div className="mb-6 flex items-center gap-4">
+          <Filter className="text-gray-400 w-5 h-5" />
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
+          >
+            <option value="all">All Requests</option>
+            <option value="pending">Pending</option>
+            <option value="responded">Responded</option>
+            <option value="approved">Approved</option>
+          </select>
+        </div>
+      )}
+
+      {/* Banned Words Management */}
+      {activeTab === 'banned-words' && (
+        <div className="space-y-6">
+          <Card>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Ban className="w-6 h-6 text-red-500" />
+              Manage Banned Words
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Words added here will prevent users from creating events with inappropriate content.
+            </p>
+
+            {/* Add New Banned Word */}
+            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold text-gray-900 mb-3">Add New Banned Word</h3>
+              <div className="space-y-3">
+                <div>
+                  <Input
+                    placeholder="Enter word to ban (case-insensitive)"
+                    value={newWord}
+                    onChange={(e) => setNewWord(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Textarea
+                    placeholder="Reason (optional)"
+                    value={newWordReason}
+                    onChange={(e) => setNewWordReason(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <Button
+                  onClick={handleAddBannedWord}
+                  disabled={addingWord || !newWord.trim()}
+                  className="w-full"
+                >
+                  {addingWord ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Banned Word
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Banned Words List */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-3">
+                Banned Words ({bannedWords.length})
+              </h3>
+              {bannedWords.length === 0 ? (
+                <Card>
+                  <div className="text-center py-8">
+                    <Ban className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No banned words yet</p>
+                  </div>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {bannedWords.map((word) => (
+                    <Card key={word.id} className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-red-600 text-lg">{word.word}</span>
+                          {word.reason && (
+                            <span className="text-sm text-gray-600">- {word.reason}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                          {word.added_by_email && (
+                            <span>Added by: {word.added_by_email}</span>
+                          )}
+                          <span>
+                            {format(new Date(word.created_at), 'MMM dd, yyyy')}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleRemoveBannedWord(word.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Requests List (only show for requests tab) */}
+      {activeTab === 'requests' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           {requests.length === 0 ? (
@@ -362,6 +533,7 @@ const AdminDashboard = () => {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

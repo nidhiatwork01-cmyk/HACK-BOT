@@ -18,7 +18,20 @@ from ml_description_enhancer import description_enhancer
 from ml_success_predictor import success_predictor
 
 app = Flask(__name__)
-CORS(app)
+# CORS configuration - allow frontend domains
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://*.vercel.app",
+            "https://*.netlify.app",
+            os.environ.get('FRONTEND_URL', '*')
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production-2024')
 
 DB_NAME = 'events.db'
@@ -61,8 +74,20 @@ def init_db():
                   created_by INTEGER,
                   event_password_hash TEXT,
                   is_locked INTEGER DEFAULT 0,
+                  is_expired INTEGER DEFAULT 0,
                   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                   FOREIGN KEY (created_by) REFERENCES users(id))''')
+    
+    # Migrate: Add is_expired column if it doesn't exist
+    c.execute("PRAGMA table_info(events)")
+    columns = [row[1] for row in c.fetchall()]
+    if 'is_expired' not in columns:
+        try:
+            c.execute('ALTER TABLE events ADD COLUMN is_expired INTEGER DEFAULT 0')
+            conn.commit()
+            print("✅ Added is_expired column to events table")
+        except Exception as e:
+            print(f"Note: is_expired column may already exist: {e}")
     
     # Registrations table
     c.execute('''CREATE TABLE IF NOT EXISTS registrations
@@ -92,6 +117,15 @@ def init_db():
                   FOREIGN KEY (user_id) REFERENCES users(id),
                   FOREIGN KEY (admin_id) REFERENCES users(id))''')
     
+    # Banned Words table (for content moderation)
+    c.execute('''CREATE TABLE IF NOT EXISTS banned_words
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  word TEXT UNIQUE NOT NULL,
+                  added_by INTEGER,
+                  reason TEXT,
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (added_by) REFERENCES users(id))''')
+    
     conn.commit()
     conn.close()
 
@@ -99,6 +133,60 @@ def get_db():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
+
+def check_banned_words(text):
+    """Check if text contains any banned words (case-insensitive)"""
+    if not text:
+        return None
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Check if table exists first
+    try:
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='banned_words'")
+        table_exists = c.fetchone() is not None
+        
+        if not table_exists:
+            # Create table if it doesn't exist
+            c.execute('''CREATE TABLE IF NOT EXISTS banned_words
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          word TEXT UNIQUE NOT NULL,
+                          added_by INTEGER,
+                          reason TEXT,
+                          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                          FOREIGN KEY (added_by) REFERENCES users(id))''')
+            conn.commit()
+        
+        # Get all banned words
+        banned_words = c.execute('SELECT word FROM banned_words').fetchall()
+        conn.close()
+        
+        if not banned_words:
+            return None
+        
+        text_lower = text.lower()
+        
+        # Check each banned word (improved matching with word boundaries)
+        import re
+        for word_row in banned_words:
+            word = word_row['word'].lower().strip()
+            if word:
+                # Check if word appears as a whole word (not just substring)
+                # This prevents false positives like "spam" matching "spamalot" 
+                # but still catches "spam" in "this is spam" or "spam hackathon"
+                pattern = r'\b' + re.escape(word) + r'\b'
+                if re.search(pattern, text_lower):
+                    return word
+                # Also check as substring for cases where it's part of compound words
+                if word in text_lower:
+                    return word
+        
+        return None
+    except Exception as e:
+        print(f"Error checking banned words: {str(e)}")
+        conn.close()
+        return None
 
 # Authentication helpers
 def validate_school_email(email):
@@ -182,20 +270,46 @@ def get_events():
     columns = [row[1] for row in c.fetchall()]
     has_registration_url = 'registration_url' in columns
     
+    # Check if is_expired column exists
+    has_is_expired = 'is_expired' in columns
+    
     if has_registration_url:
-        query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                   e.poster_url, e.registration_url, e.society, e.created_by, e.is_locked, 
-                   e.created_at,
-                   (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                   FROM events e WHERE 1=1"""
+        if has_is_expired:
+            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
+                       e.poster_url, e.registration_url, e.society, e.created_by, e.is_locked, 
+                       e.is_expired, e.created_at,
+                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
+                       FROM events e WHERE 1=1"""
+        else:
+            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
+                       e.poster_url, e.registration_url, e.society, e.created_by, e.is_locked, 
+                       0 as is_expired, e.created_at,
+                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
+                       FROM events e WHERE 1=1"""
     else:
-        query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
-                   e.poster_url, NULL as registration_url, e.society, e.created_by, e.is_locked, 
-                   e.created_at,
-                   (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
-                   FROM events e WHERE 1=1"""
+        if has_is_expired:
+            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
+                       e.poster_url, NULL as registration_url, e.society, e.created_by, e.is_locked, 
+                       e.is_expired, e.created_at,
+                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
+                       FROM events e WHERE 1=1"""
+        else:
+            query = """SELECT e.id, e.title, e.description, e.category, e.date, e.time, e.venue, 
+                       e.poster_url, NULL as registration_url, e.society, e.created_by, e.is_locked, 
+                       0 as is_expired, e.created_at,
+                       (SELECT COUNT(*) FROM registrations WHERE event_id = e.id) as registration_count
+                       FROM events e WHERE 1=1"""
     
     params = []
+    
+    # Filter out expired events by default (unless explicitly requested)
+    show_expired = request.args.get('show_expired', 'false').lower() == 'true'
+    if not show_expired:
+        if has_is_expired:
+            query += " AND (e.is_expired = 0 OR e.is_expired IS NULL)"
+        else:
+            # Auto-detect expired events based on date/time
+            query += " AND (datetime(e.date || ' ' || e.time) >= datetime('now'))"
     
     if category and category != 'all':
         query += " AND e.category = ?"
@@ -253,6 +367,23 @@ def create_event():
             if field not in data or not data[field]:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
+        # Check for banned words in title and description
+        title_text = f"{data.get('title', '')} {data.get('description', '')} {data.get('society', '')} {data.get('venue', '')}"
+        banned_word = check_banned_words(title_text)
+        
+        # Debug logging
+        print(f"🔍 Checking banned words in: {title_text[:100]}...")
+        print(f"🔍 Banned word detected: {banned_word}")
+        
+        if banned_word:
+            print(f"❌ BLOCKED: Event creation blocked due to banned word: {banned_word}")
+            return jsonify({
+                'error': 'Cannot create event: This event goes against our rules',
+                'details': f'The content contains inappropriate language and cannot be published.',
+                'banned_word_detected': banned_word,
+                'violates_rules': True
+            }), 400
+        
         conn = get_db()
         c = conn.cursor()
         
@@ -286,9 +417,21 @@ def get_event(event_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        event = c.execute('''SELECT id, title, description, category, date, time, venue, poster_url, 
-                             registration_url, society, created_by, is_locked, created_at FROM events WHERE id = ?''', 
-                         (event_id,)).fetchone()
+        
+        # Check if is_expired column exists
+        c.execute("PRAGMA table_info(events)")
+        columns = [row[1] for row in c.fetchall()]
+        has_is_expired = 'is_expired' in columns
+        
+        if has_is_expired:
+            event = c.execute('''SELECT id, title, description, category, date, time, venue, poster_url, 
+                                 registration_url, society, created_by, is_locked, is_expired, created_at 
+                                 FROM events WHERE id = ?''', (event_id,)).fetchone()
+        else:
+            event = c.execute('''SELECT id, title, description, category, date, time, venue, poster_url, 
+                                 registration_url, society, created_by, is_locked, created_at 
+                                 FROM events WHERE id = ?''', (event_id,)).fetchone()
+        
         conn.close()
         
         if event:
@@ -296,11 +439,153 @@ def get_event(event_id):
             # Ensure is_locked is 0 or 1 (not None)
             if event_dict.get('is_locked') is None:
                 event_dict['is_locked'] = 0
+            # Ensure is_expired is 0 or 1 (not None)
+            if 'is_expired' not in event_dict:
+                event_dict['is_expired'] = 0
+            elif event_dict.get('is_expired') is None:
+                event_dict['is_expired'] = 0
             return jsonify(event_dict)
         return jsonify({'error': 'Event not found'}), 404
     except Exception as e:
         print(f"Error fetching event: {str(e)}")
         import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+@require_auth
+def delete_event(event_id):
+    """Delete an event (only creator or admin can delete)"""
+    try:
+        print(f"🗑️ DELETE request received for event {event_id}")
+        print(f"   User ID: {request.user_id}, Role: {request.user_role}")
+        
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if event exists and get creator info
+        event = c.execute('SELECT created_by FROM events WHERE id = ?', (event_id,)).fetchone()
+        if not event:
+            print(f"   ❌ Event {event_id} not found")
+            conn.close()
+            return jsonify({'error': 'Event not found'}), 404
+        
+        # Convert to dict and get created_by
+        event_dict = dict(event)
+        event_creator_id = event_dict.get('created_by')
+        current_user_id = request.user_id
+        
+        # Debug logging
+        print(f"DEBUG: Event creator ID: {event_creator_id} (type: {type(event_creator_id)})")
+        print(f"DEBUG: Current user ID: {current_user_id} (type: {type(current_user_id)})")
+        print(f"DEBUG: User role: {request.user_role}")
+        
+        # Check if user is the creator or has admin privileges
+        # Also allow deletion if created_by is None (orphaned events)
+        is_creator = False
+        if event_creator_id is not None:
+            try:
+                is_creator = int(event_creator_id) == int(current_user_id)
+            except (ValueError, TypeError):
+                is_creator = False
+        
+        is_admin = request.user_role in ['admin', 'faculty', 'ksac_member']
+        is_orphaned = event_creator_id is None  # Allow deletion of orphaned events by any authenticated user
+        
+        if not is_creator and not is_admin and not is_orphaned:
+            conn.close()
+            return jsonify({
+                'error': 'Unauthorized: Only event creator or admin can delete events',
+                'details': f'Event created by: {event_creator_id}, Your ID: {current_user_id}'
+            }), 403
+        
+        # Delete all registrations for this event first (cascade delete)
+        c.execute('DELETE FROM registrations WHERE event_id = ?', (event_id,))
+        registrations_deleted = c.rowcount
+        
+        # Delete the event
+        c.execute('DELETE FROM events WHERE id = ?', (event_id,))
+        events_deleted = c.rowcount
+        
+        if events_deleted == 0:
+            conn.close()
+            return jsonify({'error': 'Event not found or could not be deleted'}), 404
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Successfully deleted event {event_id} and {registrations_deleted} registrations")
+        return jsonify({
+            'message': 'Event deleted successfully',
+            'registrations_deleted': registrations_deleted
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ ERROR deleting event {event_id}: {str(e)}")
+        print(f"Full traceback:\n{error_details}")
+        try:
+            conn.close()
+        except:
+            pass
+        return jsonify({
+            'error': 'Failed to delete event',
+            'details': str(e),
+            'traceback': error_details if app.debug else None
+        }), 500
+
+@app.route('/api/events/<int:event_id>/expire', methods=['POST'])
+@require_auth
+def mark_event_expired(event_id):
+    """Mark an event as expired (only creator or admin can mark as expired)"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if is_expired column exists, if not, add it
+        c.execute("PRAGMA table_info(events)")
+        columns = [row[1] for row in c.fetchall()]
+        if 'is_expired' not in columns:
+            try:
+                c.execute('ALTER TABLE events ADD COLUMN is_expired INTEGER DEFAULT 0')
+                conn.commit()
+            except Exception as e:
+                print(f"Note: is_expired column may already exist: {e}")
+        
+        # Check if event exists and get creator info
+        event = c.execute('SELECT created_by FROM events WHERE id = ?', (event_id,)).fetchone()
+        if not event:
+            conn.close()
+            return jsonify({'error': 'Event not found'}), 404
+        
+        # Check if user is the creator or has admin privileges
+        if event['created_by'] != request.user_id and request.user_role not in ['admin', 'faculty', 'ksac_member']:
+            conn.close()
+            return jsonify({'error': 'Unauthorized: Only event creator or admin can mark events as expired'}), 403
+        
+        # Get the expire status from request body (default to True)
+        data = request.json or {}
+        is_expired = data.get('is_expired', True)
+        
+        # Update the event
+        c.execute('UPDATE events SET is_expired = ? WHERE id = ?', (1 if is_expired else 0, event_id))
+        
+        if c.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Event not found'}), 404
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message': f'Event marked as {"expired" if is_expired else "active"} successfully',
+            'is_expired': bool(is_expired)
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"Error marking event as expired: {str(e)}")
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
@@ -1050,11 +1335,96 @@ def predict_event_success():
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+# Banned Words Management endpoints (Admin only)
+@app.route('/api/admin/banned-words', methods=['GET'])
+@require_role('admin', 'faculty', 'ksac_member')
+def get_banned_words():
+    """Get all banned words (admin only)"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        words = c.execute('''SELECT bw.id, bw.word, bw.reason, bw.created_at, 
+                           u.email as added_by_email
+                           FROM banned_words bw
+                           LEFT JOIN users u ON bw.added_by = u.id
+                           ORDER BY bw.created_at DESC''').fetchall()
+        conn.close()
+        
+        return jsonify([dict(word) for word in words]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/banned-words', methods=['POST'])
+@require_role('admin', 'faculty', 'ksac_member')
+def add_banned_word():
+    """Add a banned word (admin only)"""
+    try:
+        data = request.json
+        word = data.get('word', '').strip().lower()
+        reason = data.get('reason', '').strip()
+        
+        if not word:
+            return jsonify({'error': 'Word is required'}), 400
+        
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if word already exists
+        existing = c.execute('SELECT id FROM banned_words WHERE word = ?', (word,)).fetchone()
+        if existing:
+            conn.close()
+            return jsonify({'error': 'Word already banned'}), 400
+        
+        # Add the word
+        c.execute('INSERT INTO banned_words (word, reason, added_by) VALUES (?, ?, ?)',
+                  (word, reason, request.user_id))
+        
+        conn.commit()
+        word_id = c.lastrowid
+        conn.close()
+        
+        return jsonify({
+            'id': word_id,
+            'word': word,
+            'message': 'Banned word added successfully'
+        }), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/banned-words/<int:word_id>', methods=['DELETE'])
+@require_role('admin', 'faculty', 'ksac_member')
+def remove_banned_word(word_id):
+    """Remove a banned word (admin only)"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if word exists
+        word = c.execute('SELECT word FROM banned_words WHERE id = ?', (word_id,)).fetchone()
+        if not word:
+            conn.close()
+            return jsonify({'error': 'Banned word not found'}), 404
+        
+        # Delete the word
+        c.execute('DELETE FROM banned_words WHERE id = ?', (word_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message': 'Banned word removed successfully',
+            'word': dict(word)['word']
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Initialize database on startup
 init_db()
 
 if __name__ == '__main__':
-    print("🚀 Events Navigator Backend starting on http://localhost:5000")
+    port = int(os.environ.get('PORT', 5000))
+    print(f"🚀 Events Navigator Backend starting on port {port}")
     print("📦 Database initialized: events.db")
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=port, debug=False)
 

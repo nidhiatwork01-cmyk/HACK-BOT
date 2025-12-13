@@ -61,7 +61,15 @@ export const createEvent = async (eventData, token) => {
   } catch (error) {
     console.error('Error creating event:', error)
     if (error.response) {
-      throw new Error(error.response.data.error || 'Failed to create event')
+      const errorData = error.response.data
+      // Check if it's a rules violation
+      if (errorData.violates_rules) {
+        const error = new Error(errorData.error || 'This event goes against our rules')
+        error.violates_rules = true
+        error.details = errorData.details
+        throw error
+      }
+      throw new Error(errorData.error || 'Failed to create event')
     }
     throw new Error('Network error. Is the backend running?')
   }
@@ -142,6 +150,80 @@ export const getUserEvents = async (userId) => {
     console.error('Error fetching user events:', error)
     if (error.response) {
       throw new Error(error.response.data.error || 'Failed to fetch events')
+    }
+    throw new Error('Network error. Is the backend running?')
+  }
+}
+
+export const deleteEvent = async (eventId) => {
+  try {
+    const response = await api.delete(`/events/${eventId}`)
+    return response.data
+  } catch (error) {
+    console.error('Error deleting event:', error)
+    if (error.response) {
+      const errorData = error.response.data
+      const errorMessage = errorData.error || 'Failed to delete event'
+      const details = errorData.details ? `\n\n${errorData.details}` : ''
+      throw new Error(errorMessage + details)
+    }
+    throw new Error('Network error. Is the backend running?')
+  }
+}
+
+export const markEventExpired = async (eventId, isExpired = true) => {
+  try {
+    const response = await api.post(`/events/${eventId}/expire`, {
+      is_expired: isExpired
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error marking event as expired:', error)
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to mark event as expired')
+    }
+    throw new Error('Network error. Is the backend running?')
+  }
+}
+
+// Banned Words Management (Admin only)
+export const getBannedWords = async () => {
+  try {
+    const response = await api.get('/admin/banned-words')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching banned words:', error)
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to fetch banned words')
+    }
+    throw new Error('Network error. Is the backend running?')
+  }
+}
+
+export const addBannedWord = async (word, reason = '') => {
+  try {
+    const response = await api.post('/admin/banned-words', {
+      word: word.trim().toLowerCase(),
+      reason: reason.trim()
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error adding banned word:', error)
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to add banned word')
+    }
+    throw new Error('Network error. Is the backend running?')
+  }
+}
+
+export const removeBannedWord = async (wordId) => {
+  try {
+    const response = await api.delete(`/admin/banned-words/${wordId}`)
+    return response.data
+  } catch (error) {
+    console.error('Error removing banned word:', error)
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to remove banned word')
     }
     throw new Error('Network error. Is the backend running?')
   }

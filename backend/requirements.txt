@@ -3,9 +3,4 @@ flask-cors==4.0.0
 PyJWT==2.8.0
 bcrypt==4.1.2
 python-dotenv==1.0.0
-# ML packages are optional - code has fallbacks
-# scikit-learn>=1.4.0  # Not needed - our ML code doesn't use it
-# numpy>=1.24.0  # Not needed - our ML code doesn't use it
-# pandas>=2.0.0  # Not needed - our ML code doesn't use it
-# nltk>=3.8.0  # Not needed - our ML code doesn't use it
-# sentence-transformers>=2.2.0  # Optional - has TF-IDF fallback
+gunicorn==21.2.0

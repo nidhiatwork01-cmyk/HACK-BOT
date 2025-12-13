@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: events-navigator-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: KSAC_SECRET_KEY
+        value: hiiamfromksac
+      - key: FACULTY_SECRET_KEY
+        value: faculty-secret-2024
+      - key: SOCIETY_PRESIDENT_SECRET_KEY
+        value: society-secret-2024
+      - key: ADMIN_SECRET_KEY
+        value: admin-secret-2024
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+
+
