@@ -23,10 +23,11 @@
 3. Click "New +" → "Web Service"
 4. Connect your GitHub repository
 5. Configure:
-   - **Name**: `events-navigator-backend`
+   - **Name**: `event-navigator-backend`
    - **Environment**: `Python 3`
+   - **Root Directory**: `backend` (IMPORTANT!)
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `python app.py`
+   - **Start Command**: `gunicorn app:app`
    - **Environment Variables**:
      ```
      SECRET_KEY=your-random-secret-key-here
