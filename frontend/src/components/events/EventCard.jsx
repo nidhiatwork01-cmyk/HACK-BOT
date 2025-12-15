@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
-import { Calendar, MapPin, Users, ArrowRight, Lock, CheckCircle, ExternalLink } from 'lucide-react'
+import { Calendar, MapPin, Users, ArrowRight, Lock, CheckCircle, ExternalLink, Navigation } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../../context/AuthContext'
 import { registerEvent } from '../../services/api'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { motion, AnimatePresence } from 'framer-motion'
+import { openDirections } from '../../utils/maps'
 
 const EventCard = ({ event, index = 0, onRegister }) => {
   const { isAuthenticated } = useAuth()
@@ -119,9 +120,22 @@ const EventCard = ({ event, index = 0, onRegister }) => {
                 <span>{format(eventDate, 'MMM dd, yyyy')} at {format(eventDate, 'h:mm a')}</span>
               </div>
               
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <MapPin className="w-4 h-4 text-red-500" />
-                <span className="truncate">{event.venue}</span>
+              <div className="flex items-center justify-between gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <span className="truncate">{event.venue}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    openDirections(event.venue)
+                  }}
+                  className="flex-shrink-0 p-1.5 rounded-md hover:bg-blue-50 text-blue-600 hover:text-blue-700 transition-colors"
+                  title="Get directions"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {event.society && (

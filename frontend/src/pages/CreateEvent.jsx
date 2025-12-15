@@ -8,13 +8,14 @@ import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
+import LocationPicker from '../components/events/LocationPicker'
 import { motion } from 'framer-motion'
 import { predictEventPopularity, enhanceDescription, predictEventSuccess } from '../services/ml'
 
 const CreateEvent = () => {
   const navigate = useNavigate()
   const { addEvent } = useEvents()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
@@ -28,12 +29,16 @@ const CreateEvent = () => {
     society: '',
     event_password: '',
   })
+  const [selectedLocation, setSelectedLocation] = useState(null)
   const [lockEvent, setLockEvent] = useState(false)
   const [popularityPrediction, setPopularityPrediction] = useState(null)
   const [predicting, setPredicting] = useState(false)
   const [descriptionAnalysis, setDescriptionAnalysis] = useState(null)
   const [successPrediction, setSuccessPrediction] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
+  
+  // Check if user is privileged (admin, faculty, ksac_member, society_president)
+  const isPrivileged = user && ['admin', 'faculty', 'ksac_member', 'society_president'].includes(user.role)
 
   const handleChange = (e) => {
     setFormData({
@@ -93,6 +98,18 @@ const CreateEvent = () => {
     return () => clearTimeout(timer)
   }, [formData.title, formData.category, formData.date, formData.description, formData.society, formData.venue, formData.time])
 
+  const handleLocationSelect = (location) => {
+    setSelectedLocation(location)
+    // Auto-fill venue with location name if venue is empty
+    if (!formData.venue) {
+      setFormData({ ...formData, venue: location.name })
+    }
+  }
+
+  const handleLocationClear = () => {
+    setSelectedLocation(null)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -102,6 +119,19 @@ const CreateEvent = () => {
       if (!lockEvent) {
         delete eventData.event_password
       }
+      
+      // Add location data if privileged user selected a location
+      if (isPrivileged && selectedLocation) {
+        eventData.location_id = selectedLocation.id
+        eventData.location_lat = selectedLocation.coordinates?.lat
+        eventData.location_lng = selectedLocation.coordinates?.lng
+        eventData.location_address = selectedLocation.address
+        // Use precise location address as venue if available
+        if (selectedLocation.address) {
+          eventData.venue = selectedLocation.name
+        }
+      }
+      
       await addEvent(eventData, token)
       navigate('/events')
     } catch (error) {
@@ -224,6 +254,23 @@ const CreateEvent = () => {
                   required
                 />
               </div>
+            </div>
+
+            {/* Location Picker for Privileged Users */}
+            {isPrivileged && (
+              <div className="border-t border-gray-200 pt-6">
+                <LocationPicker
+                  selectedLocation={selectedLocation}
+                  onLocationSelect={handleLocationSelect}
+                  onClear={handleLocationClear}
+                />
+                <p className="text-xs text-blue-600 mt-2">
+                  ✨ As a {user.role}, you can select precise KIIT locations for accurate navigation!
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
