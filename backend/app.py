@@ -17,7 +17,16 @@ from ml_search import semantic_search
 from ml_description_enhancer import description_enhancer
 from ml_success_predictor import success_predictor
 
-app = Flask(__name__)
+# Configure Flask to serve static files from frontend
+import os.path
+
+# Build paths based on environment
+if os.path.exists('../frontend/dist'):
+    static_folder = os.path.abspath('../frontend/dist')
+else:
+    static_folder = None
+
+app = Flask(__name__, static_folder=static_folder, static_url_path='/')
 # CORS configuration - allow frontend domains
 CORS(app, resources={
     r"/api/*": {
@@ -1492,6 +1501,16 @@ def health_check():
 
 # Initialize database on startup
 init_db()
+
+# Serve React SPA - catch-all route for frontend
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    """Serve React app for all non-API routes"""
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return app.send_static_file(path)
+    else:
+        return app.send_static_file('index.html')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
