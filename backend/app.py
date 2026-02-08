@@ -8,14 +8,19 @@ import jwt
 import bcrypt
 import re
 from functools import wraps
-from ml_assistant import assistant
-from ml_recommender import recommender
-from ml_search import semantic_search
-from ml_description_enhancer import description_enhancer
-from ml_success_predictor import success_predictor
-from ml_search import semantic_search
-from ml_description_enhancer import description_enhancer
-from ml_success_predictor import success_predictor
+try:
+    # When imported as a package (e.g., `gunicorn backend.app:app`)
+    from backend.ml_assistant import assistant
+    from backend.ml_recommender import recommender
+    from backend.ml_search import semantic_search
+    from backend.ml_description_enhancer import description_enhancer
+    from backend.ml_success_predictor import success_predictor
+except ImportError:  # Fallback for running from `backend/` directly
+    from ml_assistant import assistant
+    from ml_recommender import recommender
+    from ml_search import semantic_search
+    from ml_description_enhancer import description_enhancer
+    from ml_success_predictor import success_predictor
 
 # Configure Flask to serve static files from frontend
 import os.path
@@ -43,7 +48,7 @@ CORS(app, resources={
 })
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production-2024')
 
-DB_NAME = 'events.db'
+DB_NAME = os.path.join(os.path.dirname(__file__), 'events.db')
 
 # School email domains (customize for your school)
 SCHOOL_EMAIL_DOMAINS = ['kiit.ac.in']  # Only KIIT email addresses allowed

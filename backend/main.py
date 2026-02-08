@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, date
 import sqlite3
+import os
 import json
 
 app = FastAPI(title="Campus Event Navigator API")
@@ -18,8 +19,10 @@ app.add_middleware(
 )
 
 # Database setup
+DB_NAME = os.path.join(os.path.dirname(__file__), 'events.db')
+
 def init_db():
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS events (
@@ -73,7 +76,7 @@ def read_root():
 
 @app.get("/api/events", response_model=List[Event])
 def get_events(category: Optional[str] = None, date_filter: Optional[str] = None):
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     
@@ -97,7 +100,7 @@ def get_events(category: Optional[str] = None, date_filter: Optional[str] = None
 
 @app.get("/api/events/{event_id}", response_model=Event)
 def get_event(event_id: int):
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute("SELECT * FROM events WHERE id = ?", (event_id,))
@@ -110,7 +113,7 @@ def get_event(event_id: int):
 
 @app.post("/api/events", response_model=Event)
 def create_event(event: Event):
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
         INSERT INTO events (title, description, category, date, time, venue, poster_url, society)
@@ -125,7 +128,7 @@ def create_event(event: Event):
 
 @app.post("/api/events/interested")
 def toggle_interest(request: InterestRequest):
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
     # Check if already interested
@@ -165,7 +168,7 @@ def toggle_interest(request: InterestRequest):
 
 @app.get("/api/events/{event_id}/interested")
 def check_interest(event_id: int, user_id: str):
-    conn = sqlite3.connect('events.db')
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
         SELECT id FROM interests WHERE event_id = ? AND user_id = ?
