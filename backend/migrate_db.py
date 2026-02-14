@@ -30,21 +30,12 @@ def migrate_database():
             print("Adding is_locked column...")
             c.execute('ALTER TABLE events ADD COLUMN is_locked INTEGER DEFAULT 0')
         
-        # Add registration_url if it doesn't exist
-        if 'registration_url' not in columns:
-            print("Adding registration_url column...")
-            c.execute('ALTER TABLE events ADD COLUMN registration_url TEXT')
+        # Add is_expired if it doesn't exist
+        if 'is_expired' not in columns:
+            print("Adding is_expired column...")
+            c.execute('ALTER TABLE events ADD COLUMN is_expired INTEGER DEFAULT 0')
         
-        # Check registrations table
-        c.execute("PRAGMA table_info(registrations)")
-        reg_columns = [row[1] for row in c.fetchall()]
-        
-        # Add user_id if it doesn't exist
-        if 'user_id' not in reg_columns:
-            print("Adding user_id column to registrations...")
-            c.execute('ALTER TABLE registrations ADD COLUMN user_id INTEGER')
-        
-        # Check users table for role column
+        # Check users table
         c.execute("PRAGMA table_info(users)")
         user_columns = [row[1] for row in c.fetchall()]
         
@@ -56,44 +47,41 @@ def migrate_database():
             print("Adding society_name column to users...")
             c.execute('ALTER TABLE users ADD COLUMN society_name TEXT')
         
-        # Create event_requests table if it doesn't exist
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='event_requests'")
-        if not c.fetchone():
-            print("Creating event_requests table...")
-            c.execute('''CREATE TABLE event_requests
-                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          user_id INTEGER,
-                          user_email TEXT,
-                          request_text TEXT NOT NULL,
-                          category_detected TEXT,
-                          sentiment TEXT,
-                          auto_response TEXT,
-                          status TEXT DEFAULT 'pending',
-                          admin_response TEXT,
-                          admin_id INTEGER,
-                          society_name TEXT,
-                          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                          responded_at TEXT,
-                          FOREIGN KEY (user_id) REFERENCES users(id),
-                          FOREIGN KEY (admin_id) REFERENCES users(id))''')
-        else:
-            # Check if society_name column exists
-            c.execute("PRAGMA table_info(event_requests)")
-            req_columns = [row[1] for row in c.fetchall()]
-            if 'society_name' not in req_columns:
-                print("Adding society_name column to event_requests...")
-                c.execute('ALTER TABLE event_requests ADD COLUMN society_name TEXT')
+        # Create registrations table if it doesn't exist
+        c.execute('''CREATE TABLE IF NOT EXISTS registrations
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      event_id INTEGER,
+                      user_id INTEGER,
+                      registered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      FOREIGN KEY (event_id) REFERENCES events(id),
+                      FOREIGN KEY (user_id) REFERENCES users(id))''')
+        
+        # Create banned_words table if it doesn't exist
+        c.execute('''CREATE TABLE IF NOT EXISTS banned_words
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      word TEXT UNIQUE NOT NULL,
+                      added_by INTEGER,
+                      reason TEXT,
+                      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      FOREIGN KEY (added_by) REFERENCES users(id))''')
+        
+        # Create assistant_requests table
+        c.execute('''CREATE TABLE IF NOT EXISTS assistant_requests
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER,
+                      request_text TEXT NOT NULL,
+                      response_text TEXT,
+                      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      FOREIGN KEY (user_id) REFERENCES users(id))''')
         
         conn.commit()
-        print("SUCCESS: Database migration completed successfully!")
+        print("✅ Database migration completed successfully!")
         
     except Exception as e:
-        print(f"ERROR: Error during migration: {str(e)}")
+        print(f"❌ Migration error: {e}")
         conn.rollback()
     finally:
         conn.close()
 
-if __name__ == '__main__':
-    print("Migrating database...")
+if __name__ == "__main__":
     migrate_database()
-

@@ -30,27 +30,20 @@ def delete_event_direct(event_id):
         conn.commit()
         conn.close()
         
-        if events_deleted > 0:
-            print(f"Successfully deleted event {event_id}")
-            print(f"  - Deleted {regs_deleted} registrations")
-            print(f"  - Deleted {events_deleted} event(s)")
-            return True
-        else:
-            print(f"Failed to delete event {event_id}")
-            return False
-            
+        print(f"✅ Delete successful!")
+        print(f"   - Deleted {events_deleted} event(s)")
+        print(f"   - Deleted {regs_deleted} registration(s)")
+        return True
+        
     except Exception as e:
-        print(f"Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error deleting event: {e}")
         return False
 
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
         print("Usage: python delete_event_direct.py <event_id>")
         print("Example: python delete_event_direct.py 6")
         sys.exit(1)
     
     event_id = int(sys.argv[1])
     delete_event_direct(event_id)
-

@@ -32,17 +32,8 @@ def setup_banned_words():
         c.execute('DELETE FROM events WHERE id = ?', (event_id,))
     
     conn.commit()
-    
-    # Show current banned words
-    words = c.execute('SELECT word, reason FROM banned_words').fetchall()
-    print(f"\n[OK] Banned words table created/updated")
-    print(f"Current banned words ({len(words)}):")
-    for word, reason in words:
-        print(f"   - {word} ({reason})")
-    
     conn.close()
-    print("\n[OK] Setup complete! Restart your backend server for changes to take effect.")
+    print(f"✅ Banned words setup complete. Removed {len(spam_events)} spam events.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     setup_banned_words()
-

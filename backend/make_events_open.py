@@ -30,12 +30,10 @@ def make_events_open():
             print(f"  Event {event[0]}: {event[1]} - {status}")
         
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        print(f"Error: {e}")
         conn.rollback()
     finally:
         conn.close()
 
-if __name__ == '__main__':
-    print("Making all events open...")
+if __name__ == "__main__":
     make_events_open()
-
