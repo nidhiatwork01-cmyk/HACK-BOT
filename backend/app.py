@@ -38,8 +38,6 @@ CORS(app, resources={
         "origins": [
             "http://localhost:3000",
             "http://localhost:5173",
-            "https://*.vercel.app",
-            "https://*.netlify.app",
             "https://*.azurewebsites.net",
             "https://*.azurestaticapps.net",
             os.environ.get('FRONTEND_URL', '*')

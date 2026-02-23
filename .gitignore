@@ -82,5 +82,4 @@ htmlcov/
 .coverage.*
 coverage.xml
 *.cover
-.vercel
 .env*.local

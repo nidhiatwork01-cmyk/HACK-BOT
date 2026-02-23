@@ -312,22 +312,17 @@ python app.py    # Start Flask development server
 ## 🌐 Deployment
 
 ### Frontend Deployment Options
-- **Vercel** - Recommended for Vite/React apps
-- **Netlify** - Static site hosting
-- **GitHub Pages** - Free hosting for static sites
+- **Azure Static Web Apps** - Recommended for Vite/React apps
+- **Azure App Service** - Full-featured web hosting
 
 ### Backend Deployment Options
-- **Render** - Python app hosting
-- **Railway** - Full-stack deployment
-- **Heroku** - Platform-as-a-Service
-- **AWS/GCP/Azure** - Cloud platforms
+- **Azure App Service** - Python web app hosting
+- **Azure Container Instances** - Docker container deployment
+- **Azure Functions** - Serverless deployment
 
 ### Configuration Files
 - `vite.config.js` - Vite build configuration
-- `vercel.json` - Vercel deployment config
-- `render.yaml` - Render deployment config
-- `Procfile` - Process file for Heroku/Render
-- `runtime.txt` - Python version specification
+- `Dockerfile` - Docker container configuration
 
 ---
 
