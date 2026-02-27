@@ -27,7 +27,10 @@ except ImportError:  # Fallback for running from `backend/` directly
 import os.path
 
 # Build paths based on environment
-if os.path.exists("../frontend/dist"):
+# Check Docker path first (where Dockerfile copies frontend build)
+if os.path.exists("frontend/dist"):
+    static_folder = os.path.abspath("frontend/dist")
+elif os.path.exists("../frontend/dist"):
     static_folder = os.path.abspath("../frontend/dist")
 else:
     static_folder = None
@@ -1731,25 +1734,6 @@ def remove_banned_word(word_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-# Root route for health check
-@app.route("/", methods=["GET"])
-def root():
-    return jsonify(
-        {
-            "message": "Events Navigator Backend API",
-            "status": "running",
-            "version": "1.0.0",
-            "endpoints": {
-                "health": "/health",
-                "api": "/api",
-                "events": "/api/events",
-                "auth": "/api/auth",
-                "stats": "/api/stats",
-            },
-        }
-    ), 200
 
 
 # Health check endpoint for Render

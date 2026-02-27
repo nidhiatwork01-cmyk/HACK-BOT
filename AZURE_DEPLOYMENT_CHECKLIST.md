@@ -68,21 +68,22 @@ Use this checklist to ensure everything is ready before deploying to Microsoft A
 - [ ] Subscription selected
 
 ### 2. Resource Group
-- [ ] Created: `az group create --name event-navigator-rg --location eastus`
+- [ ] Created: `az group create --name event-navigator-rg-sea --location southeastasia`
+- [ ] Student subscriptions may be region-restricted; use an allowed region (e.g., `southeastasia`)
 
 ### 3. Container Registry
-- [ ] ACR created: `az acr create --resource-group event-navigator-rg --name eventnavigatoracr --sku Basic`
-- [ ] Logged in: `az acr login --name eventnavigatoracr`
+- [ ] ACR created: `az acr create --resource-group event-navigator-rg-sea --name eventnavigatoracrs --sku Basic`
+- [ ] Logged in: `az acr login --name eventnavigatoracrs`
 
 ### 4. Docker Image
-- [ ] Image built: `docker build -t eventnavigatoracr.azurecr.io/event-navigator:latest .`
-- [ ] Image pushed: `docker push eventnavigatoracr.azurecr.io/event-navigator:latest`
+- [ ] Image built: `docker build -t eventnavigatoracrs.azurecr.io/event-navigator:latest .`
+- [ ] Image pushed: `docker push eventnavigatoracrs.azurecr.io/event-navigator:latest`
 
 ### 5. App Service Plan
-- [ ] Created: `az appservice plan create --name event-navigator-plan --resource-group event-navigator-rg --is-linux --sku B1`
+- [ ] Created: `az appservice plan create --name event-navigator-plan-sea --resource-group event-navigator-rg-sea --is-linux --sku B1`
 
 ### 6. Web App
-- [ ] Created: `az webapp create --resource-group event-navigator-rg --plan event-navigator-plan --name event-navigator-app --deployment-container-image-name eventnavigatoracr.azurecr.io/event-navigator:latest`
+- [ ] Created: `az webapp create --resource-group event-navigator-rg-sea --plan event-navigator-plan-sea --name event-navigator-app-sea --deployment-container-image-name eventnavigatoracrs.azurecr.io/event-navigator:latest`
 - [ ] ACR credentials configured
 - [ ] Environment variables set
 
@@ -134,6 +135,10 @@ Use this checklist to ensure everything is ready before deploying to Microsoft A
 **Issue**: App doesn't start
 - Check: `az webapp log tail --name <app-name> --resource-group <rg>`
 - Fix: Verify PORT and WEBSITES_PORT are set to 8080
+
+**Issue**: RequestDisallowedByAzure when creating resources
+- Cause: Subscription policy restricts regions
+- Fix: Create resources in an allowed region (e.g., `southeastasia`) or create a new resource group there
 
 **Issue**: Database connection fails
 - Check: DATABASE_URL environment variable
@@ -224,10 +229,10 @@ Use this checklist to ensure everything is ready before deploying to Microsoft A
 
 ```powershell
 # Variables
-$RG = "event-navigator-rg"
-$LOCATION = "eastus"
-$ACR_NAME = "eventnavigatoracr"
-$APP_NAME = "event-navigator-app"
+$RG = "event-navigator-rg-sea"
+$LOCATION = "southeastasia"
+$ACR_NAME = "eventnavigatoracrs"
+$APP_NAME = "event-navigator-app-sea"
 
 # 1. Create resource group
 az group create --name $RG --location $LOCATION
@@ -241,13 +246,13 @@ docker build -t ${ACR_NAME}.azurecr.io/event-navigator:latest .
 docker push ${ACR_NAME}.azurecr.io/event-navigator:latest
 
 # 4. Create App Service Plan
-az appservice plan create --name "${APP_NAME}-plan" --resource-group $RG --is-linux --sku B1
+az appservice plan create --name "event-navigator-plan-sea" --resource-group $RG --is-linux --sku B1
 
 # 5. Create Web App
 $ACR_USER = az acr credential show --name $ACR_NAME --query username -o tsv
 $ACR_PASS = az acr credential show --name $ACR_NAME --query passwords[0].value -o tsv
 
-az webapp create --resource-group $RG --plan "${APP_NAME}-plan" --name $APP_NAME `
+az webapp create --resource-group $RG --plan "event-navigator-plan-sea" --name $APP_NAME `
   --deployment-container-image-name "${ACR_NAME}.azurecr.io/event-navigator:latest"
 
 az webapp config container set --name $APP_NAME --resource-group $RG `
