@@ -83,6 +83,21 @@ See: **[AZURE_QUICKSTART.md](AZURE_QUICKSTART.md)**
 
 See: **[AZURE_DEPLOYMENT_GUIDE.md](AZURE_DEPLOYMENT_GUIDE.md)**
 
+### Backend-Only Azure Deploy
+
+If frontend is already deployed and API calls fail with `Is the backend running?`, deploy backend separately:
+
+```powershell
+cd C:\Users\hiten\Desktop\HackABot\HACK-BOT
+.\DEPLOY_BACKEND_AZURE.ps1 -FrontendUrl "https://your-frontend-domain"
+```
+
+Then set frontend env and redeploy frontend:
+
+```bash
+VITE_API_URL=https://<backend-fqdn>/api
+```
+
 ### Azure Architecture
 
 ```
@@ -127,6 +142,10 @@ Azure Resource Group
 - **Framer Motion** - Animations
 - **React Router** - Client-side routing
 - **Axios** - HTTP client
+
+Frontend API base URL behavior:
+- Uses `VITE_API_URL` when set (recommended for separate frontend/backend deploys)
+- Falls back to `/api` for same-origin deployments
 
 ### ML/AI
 - **TF-IDF** - Text search and similarity

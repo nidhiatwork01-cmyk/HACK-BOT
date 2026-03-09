@@ -36,18 +36,27 @@ else:
     static_folder = None
 
 app = Flask(__name__, static_folder=static_folder, static_url_path="/")
-# CORS configuration - allow frontend domains
+
+# CORS configuration - allow local dev, configured frontend URL(s), and Azure hosts
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    r"^https://.*\.azurewebsites\.net$",
+    r"^https://.*\.azurestaticapps\.net$",
+]
+
+frontend_urls = os.environ.get("FRONTEND_URL", "")
+if frontend_urls:
+    for url in frontend_urls.split(","):
+        clean_url = url.strip()
+        if clean_url:
+            cors_origins.append(clean_url)
+
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "https://*.azurewebsites.net",
-                "https://*.azurestaticapps.net",
-                os.environ.get("FRONTEND_URL", "*"),
-            ],
+            "origins": cors_origins,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
         }

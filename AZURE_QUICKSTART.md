@@ -296,4 +296,32 @@ See full guide: [AZURE_DEPLOYMENT_GUIDE.md](AZURE_DEPLOYMENT_GUIDE.md)
 
 ---
 
+## Backend-Only Azure Deploy (Frontend already live)
+
+If your frontend is already deployed (for example Vercel/Static Web App) and you keep seeing
+`Network error. Is the backend running?`, deploy backend separately with:
+
+```powershell
+cd C:\Users\hiten\Desktop\HackABot\HACK-BOT
+
+# Replace FrontendUrl with your live frontend origin
+.\DEPLOY_BACKEND_AZURE.ps1 `
+  -ResourceGroup "event-navigator-rg" `
+  -Location "eastus" `
+  -AcrName "eventnavigatoracr" `
+  -ContainerEnvName "event-navigator-env" `
+  -BackendAppName "event-navigator-backend" `
+  -FrontendUrl "https://your-frontend-domain.vercel.app"
+```
+
+After deployment, set frontend env:
+
+```bash
+VITE_API_URL=https://<your-backend-fqdn>/api
+```
+
+Then redeploy frontend.
+
+---
+
 **🎉 Congratulations! Your app is now running on Microsoft Azure!**
